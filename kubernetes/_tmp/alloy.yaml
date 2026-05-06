@@ -1,0 +1,159 @@
+# =============================================================================
+# Grafana Alloy — student cluster agent
+# Helm chart: grafana/alloy
+#
+# Pred inštaláciou: zmeň STUDENT_PREFIX na skutočný prefix (napr. korzunv)
+# =============================================================================
+
+controller:
+  type: deployment   # Single pod — loki.source.kubernetes číta cez K8s API
+
+alloy:
+  extraEnv:
+    - name: STUDENT_PREFIX
+      value: "pieterr"        # <-- ZMEŇ na skutočný prefix (napr. korzunv)
+    - name: CLUSTER_NAME
+      value: "fsa-aks-pieterr"    # <-- ZMEŇ na aks-<prefix> (napr. aks-korzunv)
+
+  configMap:
+    content: |
+      // ==========================================================================
+      // Discovery — všetky pody v namespace "app"
+      // ==========================================================================
+
+      discovery.kubernetes "pods" {
+        role = "pod"
+        namespaces {
+          names = ["app"]
+        }
+      }
+
+      // ==========================================================================
+      // METRIKY
+      // ==========================================================================
+
+      discovery.relabel "metrics" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Scrapuj len pody s anotáciou prometheus.io/scrape: "true"
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+          action        = "keep"
+          regex         = "true"
+        }
+
+        // Použi cestu z anotácie (napr. /actuator/prometheus alebo /metrics)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+          target_label  = "__metrics_path__"
+          regex         = "(.+)"
+        }
+
+        // Použi port z anotácie
+        rule {
+          source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+          action        = "replace"
+          regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+          replacement   = "$1:$2"
+          target_label  = "__address__"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+
+        // Label pre filtrovanie podľa študenta v Grafane
+        rule {
+          replacement  = sys.env("STUDENT_PREFIX")
+          target_label = "student"
+        }
+
+        rule {
+          replacement  = sys.env("CLUSTER_NAME")
+          target_label = "cluster"
+        }
+      }
+
+      prometheus.scrape "app" {
+        targets         = discovery.relabel.metrics.output
+        forward_to      = [prometheus.remote_write.instructor.receiver]
+        scrape_interval = "30s"
+      }
+
+      prometheus.remote_write "instructor" {
+        endpoint {
+          url = "https://prometheus.fullstackacademy.sk/api/v1/write"
+        }
+      }
+
+      // ==========================================================================
+      // LOGY
+      // ==========================================================================
+
+      discovery.relabel "logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+
+        // Label pre filtrovanie podľa študenta v Grafane
+        rule {
+          replacement  = sys.env("STUDENT_PREFIX")
+          target_label = "student"
+        }
+
+        rule {
+          replacement  = sys.env("CLUSTER_NAME")
+          target_label = "cluster"
+        }
+      }
+
+      loki.source.kubernetes "app" {
+        targets    = discovery.relabel.logs.output
+        forward_to = [loki.write.instructor.receiver]
+      }
+
+      loki.write "instructor" {
+        endpoint {
+          url = "https://alloy.fullstackacademy.sk/loki/api/v1/push"
+        }
+      }
+
+rbac:
+  create: true
+  extraClusterRoleRules:
+    # Potrebné pre loki.source.kubernetes — default chart toto neobsahuje
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get", "list", "watch"]
+
+serviceAccount:
+  create: true

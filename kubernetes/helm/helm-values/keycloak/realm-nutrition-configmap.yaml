@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-nutrition
+  namespace: app
+data:
+  realm-nutrition.json: |-
+    [
+      {
+        "realm": "NUTRITION",
+        "enabled": true,
+        "displayName": "Nutrition Planner",
+        "sslRequired": "external",
+        "registrationAllowed": false,
+        "loginWithEmailAllowed": true,
+        "duplicateEmailsAllowed": false,
+        "resetPasswordAllowed": true,
+        "rememberMe": true,
+        "roles": {
+          "realm": [
+            {
+              "name": "ADMIN",
+              "description": "Application administrator"
+            },
+            {
+              "name": "USER",
+              "description": "Standard authenticated user"
+            },
+            {
+              "name": "PREMIUM_USER",
+              "description": "Premium subscription user"
+            }
+          ]
+        },
+        "clients": [
+          {
+            "clientId": "nutrition-planner-client",
+            "name": "nutrition-planner-client",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": true,
+            "directAccessGrantsEnabled": true,
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "serviceAccountsEnabled": false,
+            "redirectUris": [
+              "http://localhost:4200/*",
+              "https://nutrition-planner.20-166-89-50.nip.io/*"
+            ],
+            "webOrigins": [
+              "http://localhost:4200",
+              "https://nutrition-planner.20-166-89-50.nip.io"
+            ],
+            "defaultClientScopes": [
+              "web-origins",
+              "acr",
+              "roles",
+              "profile",
+              "email"
+            ],
+            "optionalClientScopes": [
+              "address",
+              "phone",
+              "offline_access",
+              "microprofile-jwt"
+            ]
+          }
+        ],
+        "users": [
+          {
+            "username": "admin@nutrition.local",
+            "enabled": true,
+            "emailVerified": true,
+            "firstName": "Admin",
+            "lastName": "User",
+            "email": "admin@nutrition.local",
+            "credentials": [
+              {
+                "type": "password",
+                "value": "admin123",
+                "temporary": false
+              }
+            ],
+            "realmRoles": [
+              "ADMIN"
+            ]
+          },
+          {
+            "username": "user@nutrition.local",
+            "enabled": true,
+            "emailVerified": true,
+            "firstName": "Regular",
+            "lastName": "User",
+            "email": "user@nutrition.local",
+            "credentials": [
+              {
+                "type": "password",
+                "value": "user123",
+                "temporary": false
+              }
+            ],
+            "realmRoles": [
+              "USER"
+            ]
+          },
+          {
+            "username": "premium@nutrition.local",
+            "enabled": true,
+            "emailVerified": true,
+            "firstName": "Premium",
+            "lastName": "User",
+            "email": "premium@nutrition.local",
+            "credentials": [
+              {
+                "type": "password",
+                "value": "premium123",
+                "temporary": false
+              }
+            ],
+            "realmRoles": [
+              "PREMIUM_USER"
+            ]
+          }
+        ]
+      }
+    ]

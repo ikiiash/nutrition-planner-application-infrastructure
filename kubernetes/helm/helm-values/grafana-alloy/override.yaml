@@ -1,0 +1,263 @@
+alloy:
+  configMap:
+    content: |
+      // ==========================================================================
+      // Spoločné labely — pomocná funkcia pre oba pipeline (metrics + logs)
+      // ==========================================================================
+
+      // ── Discovery: app + ingress-nginx namespace ───────────────────────────────
+      discovery.kubernetes "pods_app" {
+        role = "pod"
+        namespaces {
+          names = ["app", "ingress-nginx"]
+        }
+      }
+
+      // ── Discovery: infra namespace — len gitlab-runner ─────────────────────────
+      discovery.kubernetes "pods_infra" {
+        role = "pod"
+        namespaces {
+          names = ["infra"]
+        }
+      }
+
+      discovery.relabel "pods_infra_filtered" {
+        targets = discovery.kubernetes.pods_infra.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          action        = "keep"
+          regex         = "gitlab-runner"
+        }
+      }
+
+      // ==========================================================================
+      // METRICS
+      // ==========================================================================
+
+      // ── Relabeling pre scrape — app + ingress-nginx ────────────────────────────
+      discovery.relabel "metrics_app" {
+        targets = discovery.kubernetes.pods_app.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+          action        = "keep"
+          regex         = "true"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+          target_label  = "__metrics_path__"
+          regex         = "(.+)"
+        }
+
+        rule {
+          source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+          action        = "replace"
+          regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+          replacement   = "$1:$2"
+          target_label  = "__address__"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+
+        rule {
+          replacement  = "aks-fsa-kiiashchenkoi"
+          target_label = "cluster"
+        }
+      }
+
+      // ── Relabeling pre scrape — gitlab-runner ──────────────────────────────────
+      discovery.relabel "metrics_infra" {
+        targets = discovery.relabel.pods_infra_filtered.output
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_scrape"]
+          action        = "keep"
+          regex         = "true"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_prometheus_io_path"]
+          target_label  = "__metrics_path__"
+          regex         = "(.+)"
+        }
+
+        rule {
+          source_labels = ["__address__", "__meta_kubernetes_pod_annotation_prometheus_io_port"]
+          action        = "replace"
+          regex         = "([^:]+)(?::\\d+)?;(\\d+)"
+          replacement   = "$1:$2"
+          target_label  = "__address__"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          replacement  = "gitlab-runner"
+          target_label = "app"
+        }
+
+        rule {
+          replacement  = "aks-fsa-kiiashchenkoi"
+          target_label = "cluster"
+        }
+      }
+
+      prometheus.scrape "app" {
+        targets         = discovery.relabel.metrics_app.output
+        forward_to      = [prometheus.remote_write.local.receiver]
+        scrape_interval = "30s"
+      }
+
+      prometheus.scrape "infra" {
+        targets         = discovery.relabel.metrics_infra.output
+        forward_to      = [prometheus.remote_write.local.receiver]
+        scrape_interval = "30s"
+      }
+
+      prometheus.remote_write "local" {
+        endpoint {
+          url = "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+        }
+      }
+
+      // ==========================================================================
+      // LOGS
+      // ==========================================================================
+
+      discovery.relabel "logs_app" {
+        targets = discovery.kubernetes.pods_app.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+
+        rule {
+          replacement  = "aks-fsa-kiiashchenkoi"
+          target_label = "cluster"
+        }
+      }
+
+      discovery.relabel "logs_infra" {
+        targets = discovery.relabel.pods_infra_filtered.output
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        rule {
+          replacement  = "gitlab-runner"
+          target_label = "app"
+        }
+
+        rule {
+          replacement  = "aks-fsa-kiiashchenkoi"
+          target_label = "cluster"
+        }
+      }
+
+      loki.source.kubernetes "app" {
+        targets    = discovery.relabel.logs_app.output
+        forward_to = [loki.write.local.receiver]
+      }
+
+      loki.source.kubernetes "infra" {
+        targets    = discovery.relabel.logs_infra.output
+        forward_to = [loki.write.local.receiver]
+      }
+
+      loki.write "local" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+      // ==========================================================================
+      // GATEWAY — prijíma Loki push zo študentských clustrov
+      // ==========================================================================
+
+      loki.source.api "gateway" {
+        http {
+          listen_address = "0.0.0.0"
+          listen_port    = 3101
+        }
+        forward_to = [loki.write.local.receiver]
+      }
+
+# Tieto sekcie sú na TOP LEVELI (nie pod alloy:) — Helm chart ich tu očakáva
+service:
+  enabled: true
+
+rbac:
+  create: true
+
+serviceAccount:
+  create: true
+
+# Samostatný Service pre Loki push gateway (port 3101)
+# grafana/alloy chart nepodporuje extraPorts — preto cez extraObjects
+extraObjects:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: alloy-loki-gateway
+      namespace: monitoring
+    spec:
+      type: ClusterIP
+      selector:
+        app.kubernetes.io/name: alloy
+        app.kubernetes.io/instance: alloy
+      ports:
+        - name: loki-gateway
+          port: 3101
+          targetPort: 3101
+          protocol: TCP

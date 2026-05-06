@@ -1,0 +1,74 @@
+@startuml
+title FSA 2026 — Kubernetes resources (čo beží kde)
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+top to bottom direction
+
+package "AKS Cluster  (<prefix>-aks)" as CLUSTER #D5F5E3 {
+
+  package "Namespace: infra" as NSINFRA #EAF2FF {
+
+    package "ingress-nginx  (Helm 4.15.1)" as ING #F9F9F9 {
+      component "Deployment  nginx-controller\nv1.15.1" as ing_dep
+      component "Service  [LoadBalancer]\n→ Public IP :443 / :80" as ing_svc
+    }
+
+    package "cert-manager  (Helm 1.20.1)" as CM #F9F9F9 {
+      component "Deployment  cert-manager" as cm_dep
+      component "ClusterIssuer  letsencrypt-prod\nACME HTTP-01" as cm_issuer
+    }
+
+    package "gitlab-runner  (Helm 0.87.0)" as RUNNER #F9F9F9 {
+      component "Deployment  gitlab-runner\nKubernetes executor" as runner_dep
+      component "Secret  gitlab-runner-secret\nrunner token" as runner_sec
+    }
+
+    component "Ingress  app-ingress\nrouting rules" as ing_res
+  }
+
+  package "Namespace: app" as NSAPP #FEF9E7 {
+
+    package "Keycloak  (Helm codecentric 7.1.9)" as KC #F9F9F9 {
+      component "Deployment  keycloak\nquay.io/keycloak:26.5.5" as kc_dep
+      component "Service  [ClusterIP :8080]" as kc_svc
+      component "ConfigMap  realm-fsa-configmap\nFSA realm + users" as kc_cm
+      component "ConfigMap  keycloak-java-config\nJVM / Azure PSQL cert" as kc_java
+      component "Secret  keycloak-secret\nkc_password" as kc_sec
+    }
+
+    package "Backend  (kubectl)" as BE #F9F9F9 {
+      component "Deployment  fsa-be\nSpring Boot / Java 25" as be_dep
+      component "Service  [ClusterIP :8080]" as be_svc
+      component "Secret  postgres-secret\ndb_password / db_url" as be_sec
+    }
+
+    package "Frontend  (kubectl)" as FE #F9F9F9 {
+      component "Deployment  fsa-fe\nAngular / Nginx" as fe_dep
+      component "Service  [ClusterIP :80]" as fe_svc
+    }
+  }
+}
+
+ing_svc --> ing_res
+ing_res --> kc_svc : /auth/...
+ing_res --> be_svc : /api/...
+ing_res --> fe_svc : /
+
+cm_dep --> cm_issuer
+cm_issuer ..> ing_res : TLS Secret
+
+runner_dep --> runner_sec
+
+kc_dep --> kc_svc
+kc_dep --> kc_cm
+kc_dep --> kc_java
+kc_dep --> kc_sec
+
+be_dep --> be_svc
+be_dep --> be_sec
+
+fe_dep --> fe_svc
+
+@enduml

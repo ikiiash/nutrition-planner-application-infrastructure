@@ -1,0 +1,46 @@
+alertmanager:
+  enabled: false
+
+grafana:
+  admin:
+    existingSecret: grafana-secret
+    userKey: username
+    passwordKey: password
+
+  grafana.ini:
+    server:
+      root_url: https://grafana.20-166-89-50.nip.io
+    auth:
+      disable_login_form: false
+
+  persistence:
+    enabled: true
+    size: 2Gi
+
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      isDefault: false
+      jsonData:
+        maxLines: 1000
+
+prometheus:
+  prometheusSpec:
+    enableRemoteWriteReceiver: true
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 8Gi
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true

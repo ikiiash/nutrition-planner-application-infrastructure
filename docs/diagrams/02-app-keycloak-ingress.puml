@@ -1,0 +1,72 @@
+@startuml
+title FSA 2026 — Aplikácie, Keycloak a Ingress routing
+
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/master/dist
+!include AzurePuml/AzureCommon.puml
+!include AzurePuml/Databases/AzureDatabaseForPostgreSQL.puml
+!include AzurePuml/Networking/AzurePublicIPAddress.puml
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+actor "Používateľ\n(prehliadač)" as user
+
+AzurePublicIPAddress(pip, "Public IP", "pip-<prefix>")
+
+package "Namespace: infra" as NSINFRA #EAF2FF {
+  component "Service  [LoadBalancer]\ningress-nginx" as ingsvc
+  component "Ingress  [routing rules]\n──────────────\n/           → fsa-fe:80\n/api/...    → fsa-be:8080\n/auth/...   → keycloak:8080" as ingress
+}
+
+package "Namespace: app" as NSAPP #FEF9E7 {
+
+  package "Frontend" as FEP #F9F9F9 {
+    component "Deployment  fsa-fe\nAngular / Nginx" as fe_dep
+    component "Service  [ClusterIP :80]" as fe_svc
+  }
+
+  package "Backend" as BEP #F9F9F9 {
+    component "Deployment  fsa-be\nSpring Boot" as be_dep
+    component "Service  [ClusterIP :8080]" as be_svc
+    component "Secret  postgres-secret\ndb_password / db_url" as be_sec
+  }
+
+  package "Keycloak" as KCP #F9F9F9 {
+    component "Deployment  keycloak\nquay.io/keycloak:26.5.5" as kc_dep
+    component "Service  [ClusterIP :8080]" as kc_svc
+    component "ConfigMap  realm-fsa-configmap\nFSA realm + users" as kc_cm
+    component "Secret  keycloak-secret\nadmin password" as kc_sec
+  }
+}
+
+AzureDatabaseForPostgreSQL(psql, "PostgreSQL\n<prefix>-psql", "keycloak DB\nfsa-db")
+
+' User flow
+user --> pip
+pip --> ingsvc : IP :443
+ingsvc --> ingress
+
+ingress --> fe_svc
+ingress --> be_svc
+ingress --> kc_svc
+
+fe_svc --> fe_dep
+be_svc --> be_dep
+kc_svc --> kc_dep
+
+' Auth
+fe_dep --> kc_svc : OAuth2 redirect\n(login / logout)
+be_dep --> kc_svc : JWT validácia\n(JWKS endpoint)
+
+' Secrets / ConfigMaps
+kc_dep --> kc_cm
+kc_dep --> kc_sec
+be_dep --> be_sec
+
+' DB
+be_dep --> psql : JDBC  (fsa-db)
+kc_dep --> psql : JDBC  (keycloak)
+
+@enduml

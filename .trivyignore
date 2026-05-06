@@ -1,0 +1,11 @@
+# AKS workshop setup - tieto findings su intentionally ignorovane
+# Pre produkcne prostredie je potrebne ich adresovat
+
+# AVD-AZU-0040: OMS Agent logging - workshop cluster nepotrebuje Azure Monitor
+AVD-AZU-0040
+# AVD-AZU-0041: API server IP whitelisting - workshop cluster je pristupny pre studentov
+AVD-AZU-0041
+# AVD-AZU-0042: RBAC - AKS ma RBAC zapnute defaultne od v1.16, trivy false positive
+AVD-AZU-0042
+# AVD-AZU-0043: Network policy - workshop cluster nepotrebuje network policy
+AVD-AZU-0043

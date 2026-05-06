@@ -1,0 +1,93 @@
+# =============================================================================
+# Keycloak (keycloakx) — FSA-špecifické nastavenia (chart 7.1.9 / KC 26.5.5)
+#
+# Tu sú LEN hodnoty, ktoré sa líšia od defaults (values-default.yaml).
+#
+# Prerekvizity (aplikuj pred helm install):
+#   kubectl apply -f keycloak-java-config.yaml    # fix Azure PostgreSQL cert
+#   kubectl apply -f realm-nutrition-configmap.yaml  # Nutrition realm import
+#
+# Inštalácia:
+#   helm repo add codecentric https://codecentric.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install keycloak -n app codecentric/keycloakx \
+#     --version 7.1.9 -f override.yaml
+# =============================================================================
+
+## Fixný názov releasu — service bude nutrition-keycloak-http (matchuje ingress)
+fullnameOverride: "nutrition-keycloak"
+
+## Príkaz na spustenie KC 26 — HTTP mode, import realm pri prvom štarte
+## Pozn: --hostname-strict-https bolo odstránené v KC 25+
+command:
+  - "/opt/keycloak/bin/kc.sh"
+  - "--verbose"
+  - "start"
+  - "--http-enabled=true"
+  - "--http-port=8080"
+  - "--hostname-strict=false"
+  - "--import-realm"
+
+## Resource limity pre workshop prostredie
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "500m"
+    memory: "1024Mi"
+
+## Env premenné — JVM tuning + admin credentials z secretu
+extraEnv: |
+  - name: JAVA_OPTS
+    value: >-
+      -Xms256m
+      -Xmx2048m
+      -XX:MetaspaceSize=96M
+      -XX:MaxMetaspaceSize=256m
+      -Djava.net.preferIPv4Stack=true
+      -Djava.awt.headless=true
+  ## Bootstrap admin pre master realm — KC 26+ pouziva KC_BOOTSTRAP_ADMIN_*
+  - name: KC_BOOTSTRAP_ADMIN_USERNAME
+    value: admin
+  - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: keycloak-secret
+        key: kc_password
+  - name: JAVA_OPTS_APPEND
+    value: "-Djgroups.dns.query={{ include "keycloak.fullname" . }}-headless"
+
+## Volumes — Azure PostgreSQL cert fix + Nutrition realm import
+## Realm JSON sa mountuje do /opt/keycloak/data/import/ a --import-realm ho načíta pri štarte
+extraVolumes: |
+  - name: keycloak-java-config
+    configMap:
+      name: keycloak-java-config
+  - name: keycloak-realm-nutrition
+    configMap:
+      name: keycloak-realm-nutrition
+
+extraVolumeMounts: |
+  - name: keycloak-java-config
+    mountPath: /etc/crypto-policies/back-ends/java.config
+    subPath: java.config
+  - name: keycloak-realm-nutrition
+    mountPath: /opt/keycloak/data/import/realm-nutrition.json
+    subPath: realm-nutrition.json
+
+## Databáza — Azure PostgreSQL Flexible Server
+database:
+  existingSecret: "postgres-secret"
+  existingSecretKey: "db_password"
+  vendor: postgres
+  hostname: psql-fsa-kiiashchenkoi.postgres.database.azure.com
+  port: 5432
+  database: keycloak-nutrition
+  username: fsaadmin
+
+## Proxy — KC beží za nginx ingress (TLS terminuje ingress)
+## KC 26+: "edge" je neplatné — nginx posiela X-Forwarded-* hlavičky → xforwarded
+proxy:
+  enabled: true
+  mode: xforwarded

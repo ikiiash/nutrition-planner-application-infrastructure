@@ -1,0 +1,3 @@
+# cookiecutter/generated/ obsahuje vygenerovane terraform.auto.tfvars
+# pre studentov — hesla su intentionally commitnute (workshop setup)
+cookiecutter/generated/**

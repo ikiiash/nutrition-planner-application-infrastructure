@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nutrition-planner-fe
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nutrition-planner-fe
+  template:
+    metadata:
+      labels:
+        app: nutrition-planner-fe
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9113"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: nutrition-planner-fe
+          image: acrfsakiiashchenkoi.azurecr.io/nutrition-planner-frontend:latest
+          imagePullPolicy: Always
+          resources:
+            # TODO: nastavit podla metrik podu, toto su len odhadnute hodnoty
+            limits:
+              cpu: 250m
+              memory: 250Mi
+            requests:
+              cpu: 150m
+              memory: 150Mi
+          # livenessProbe:
+          #   httpGet:
+          #     # TODO: zmenit na nejaky validny endpoint
+          #     path: /
+          #     port: http
+          # readinessProbe:
+          #   httpGet:
+          #     # TODO: zmenit na nejaky validny endpoint
+          #     path: /
+          #     port: http
+          ports:
+            - name: http
+              containerPort: 80
+
+        - name: nginx-exporter
+          image: nginx/nginx-prometheus-exporter:1.3
+          args:
+            - --nginx.scrape-uri=http://localhost:8080/stub_status
+          ports:
+            - name: metrics
+              containerPort: 9113
+          resources:
+            limits:
+              cpu: 50m
+              memory: 32Mi
+            requests:
+              cpu: 10m
+              memory: 16Mi

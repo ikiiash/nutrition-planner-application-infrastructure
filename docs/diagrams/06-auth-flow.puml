@@ -1,0 +1,66 @@
+@startuml
+title FSA 2026 — Autentifikačný flow (OAuth2 / OIDC)
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam sequenceBoxBackgroundColor #F9F9F9
+skinparam sequenceBoxBorderColor #AAAAAA
+skinparam ParticipantBackgroundColor #EEF4FF
+skinparam ParticipantBorderColor #4A6FA5
+skinparam sequenceArrowThickness 1.5
+
+participant "Prehliadač\n(Angular FE)" as FE #FEF9E7
+participant "ingress-nginx" as ING #EAF2FF
+participant "Keycloak\n(/auth/...)" as KC #F5EEF8
+participant "Backend\n(Spring Boot)" as BE #D5F5E3
+participant "PostgreSQL\n(fsa-db)" as DB #FDEBD0
+
+== Inicializácia — načítanie OIDC konfigurácie ==
+
+FE -> ING : GET /auth/realms/fsa/.well-known/openid-configuration
+ING -> KC : forward
+KC --> FE : OIDC metadata\n(token_endpoint, jwks_uri, ...)
+
+== Prihlásenie (Authorization Code Flow) ==
+
+FE -> KC : redirect → /auth/realms/fsa/protocol/openid-connect/auth\n?client_id=FSA-client&response_type=code&redirect_uri=...
+KC --> FE : Login stránka
+FE -> KC : POST credentials  (email + heslo)
+KC -> KC : overenie hesla\n(bcrypt hash)
+KC --> FE : redirect → /callback?code=<auth_code>
+
+FE -> KC : POST /token\nbody: code=<auth_code>&client_id=FSA-client
+KC --> FE : access_token (JWT, 5 min)\nrefresh_token (JWT, 30 min)\nid_token
+
+note right of FE
+  access_token obsahuje:
+  - sub (user ID)
+  - email
+  - realm_roles: [STUDENT / TEACHER / ADMIN]
+  - exp (expirácia)
+end note
+
+== Autorizovaný API request ==
+
+FE -> ING : GET /api/discussions\nAuthorization: Bearer <access_token>
+ING -> BE : forward request + token
+BE -> KC : GET /auth/realms/fsa/protocol/openid-connect/certs\n(iba pri štarte alebo cache miss)
+KC --> BE : JWKS (public key pre overenie podpisu)
+BE -> BE : lokálna JWT verifikácia\n(podpis + exp + rola)
+BE -> DB : SELECT ... FROM discussion
+DB --> BE : výsledky
+BE --> FE : 200 OK + JSON
+
+== Obnova tokenu (refresh) ==
+
+FE -> KC : POST /token\ngrant_type=refresh_token&refresh_token=<token>
+KC --> FE : nový access_token
+
+note right of FE
+  Angular interceptor automaticky
+  refreshuje token pred každým
+  volaním ak access_token expiroval
+end note
+
+@enduml

@@ -1,0 +1,50 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^kubernetes/helm/helm-charts/.*/templates/
+      - id: check-added-large-files
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: detect-private-key
+        exclude: ^cookiecutter/generated/
+      - id: mixed-line-ending
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.105.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        exclude: ^cookiecutter/
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+        exclude: ^cookiecutter/
+      - id: terraform_trivy
+        args:
+          - --args=--severity=MEDIUM,HIGH,CRITICAL
+          - --args=--ignorefile=__GIT_WORKING_DIR__/.trivyignore
+      - id: terraform_docs
+        args:
+          - --args=--config=.terraform-docs.yml
+
+  # SKIP=gitleaks-system pre-commit run --all-files
+  # Skenuje len staged subory pred commitom
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks-system
+        args: [--redact=50, --no-banner, --gitleaks-ignore-path=.gitleaksignore]
+        # Vo verzii pre-commit hooku v8.19.0 je pass_filenames: true,
+        # co je pravdepodobne chyba (nefunguje korektne s Gitleaks v8.21.2+)
+        pass_filenames: false
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.0
+    hooks:
+      - id: markdownlint-cli2
+        args: ["--fix", "#node_modules"]

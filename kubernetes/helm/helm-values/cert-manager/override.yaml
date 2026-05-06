@@ -1,0 +1,14 @@
+# cert-manager — FSA Workshop override values
+# Obsahuje IBA zmeny oproti default values (values-default.yaml).
+
+# Namespace pre cert-manager deployment
+namespace: "cert-manager"
+
+# Automaticka instalacia CRDs spolu s helm chartom
+# (v 1.20.x nahradzuje deprecated installCRDs: true)
+crds:
+  enabled: true
+
+# Prometheus monitoring — vypnute (workshop nema Prometheus)
+prometheus:
+  enabled: false

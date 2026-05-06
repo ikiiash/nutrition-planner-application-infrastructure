@@ -1,0 +1,61 @@
+@startuml
+title FSA 2026 — Prehľad architektúry
+
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/master/dist
+!include AzurePuml/AzureCommon.puml
+!include AzurePuml/Containers/AzureKubernetesService.puml
+!include AzurePuml/Containers/AzureContainerRegistry.puml
+!include AzurePuml/Databases/AzureDatabaseForPostgreSQL.puml
+!include AzurePuml/Networking/AzurePublicIPAddress.puml
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+actor "Developer" as dev
+actor "Používateľ" as user
+
+package "GitLab  (zdieľaný server)" as GITLAB #F5EEF8 {
+  component "Repozitár + CI/CD Pipeline" as gitlab
+  component "GitLab Runner\n(beží v AKS)" as runner
+}
+
+package "Microsoft Azure" as AZURE #D6EAF8 {
+
+  AzureContainerRegistry(acr, "ACR", "<prefix>acr")
+
+  package "AKS Cluster  (<prefix>-aks)" as AKS #D5F5E3 {
+    package "Namespace: infra" as NSINFRA #EAF2FF {
+      component "ingress-nginx" as ingress
+      component "cert-manager" as cm
+    }
+    package "Namespace: app" as NSAPP #FEF9E7 {
+      component "Keycloak" as kc
+      component "Backend  (Spring Boot)" as be
+      component "Frontend  (Angular)" as fe
+    }
+  }
+
+  AzurePublicIPAddress(pip, "Public IP", "pip-<prefix>")
+  AzureDatabaseForPostgreSQL(psql, "PostgreSQL", "<prefix>-psql")
+}
+
+dev --> gitlab : git push
+gitlab --> runner : CI/CD trigger
+runner --> acr : docker build\n+ push
+
+acr ..> AKS : image pull
+
+user --> pip : HTTPS
+pip --> ingress
+ingress --> fe : /
+ingress --> be : /api/...
+ingress --> kc : /auth/...
+
+cm ..> ingress : TLS certifikát
+
+be --> psql
+kc --> psql
+
+@enduml

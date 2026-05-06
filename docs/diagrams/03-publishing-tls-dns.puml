@@ -1,0 +1,68 @@
+@startuml
+title FSA 2026 — Publikovanie, TLS a DNS
+
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/master/dist
+!include AzurePuml/AzureCommon.puml
+!include AzurePuml/Networking/AzurePublicIPAddress.puml
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+top to bottom direction
+
+actor "Používateľ" as user
+
+package "Internet" as INET #F2F3F4 {
+  component "Let's Encrypt\n(ACME server)" as le
+}
+
+package "Microsoft Azure  —  Zdieľané" as AZURE_SHARED #D6EAF8 {
+  component "Azure DNS Zóna\nfullstackacademy.sk" as dns
+}
+
+package "Microsoft Azure  —  Subscription" as AZURE #D6EAF8 {
+
+  AzurePublicIPAddress(pip, "Public IP", "pip-<prefix>")
+
+  package "AKS  —  Namespace: infra" as NSINFRA #EAF2FF {
+
+    package "cert-manager  (Helm 1.20.1)" as CM #D5F5E3 {
+      component "ClusterIssuer\nletsencrypt-prod" as issuer
+      component "Certificate\nfsa-tls-secret" as cert
+    }
+
+    component "Service  [LoadBalancer]\ningress-nginx  → pip" as ingsvc
+    component "Ingress  [TLS termination]\n──────────────────────\ntls:\n  secretName: fsa-tls-secret\nhosts:\n  fsa-<prefix>.fullstackacademy.sk" as ingress
+  }
+
+  package "AKS  —  Namespace: app" as NSAPP #FEF9E7 {
+    component "Frontend   /\nBackend    /api/...\nKeycloak   /auth/..." as apps
+  }
+}
+
+dns --> pip : A záznam\nfsa-<prefix>.fullstackacademy.sk → IP
+
+user --> dns : https://fsa-<prefix>.fullstackacademy.sk
+dns --> pip : IP lookup
+pip --> ingsvc : TCP :443
+
+issuer --> le : ACME HTTP-01 challenge
+le --> cert : podpísaný certifikát\n(90 dní, auto-renew)
+cert --> ingress : mountuje TLS Secret
+
+ingsvc --> ingress
+ingress --> apps
+
+note right of cert
+  cert-manager automaticky
+  obnovuje certifikát pred
+  expiráciou bez zásahu
+end note
+
+note right of ingress
+  annotations:
+  cert-manager.io/cluster-issuer: letsencrypt-prod
+  nginx.ingress.kubernetes.io/ssl-redirect: "true"
+end note
+
+@enduml

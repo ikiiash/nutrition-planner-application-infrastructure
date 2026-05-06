@@ -1,0 +1,68 @@
+@startuml
+title FSA 2026 — CI/CD Pipeline (GitLab CI)
+
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/master/dist
+!include AzurePuml/AzureCommon.puml
+!include AzurePuml/Containers/AzureContainerRegistry.puml
+!include AzurePuml/Containers/AzureKubernetesService.puml
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+left to right direction
+
+actor "Developer" as dev
+
+package "GitHub" as GH #F2F3F4 {
+  component "main branch\nFSA-onion-architecture\nFSA-angular" as ghrepo
+}
+
+package "GitLab  (gitlab.fullstackacademy.sk)" as GL #F5EEF8 {
+  component "Repozitár  (mirror)" as glrepo
+
+  package ".gitlab-ci.yml" as YAML #EAF2FF {
+    component "stage: build\n──────────────────────\ndocker login $CONTAINER_REGISTRY\ndocker build -t $IMAGE_NAME .\ndocker push $IMAGE_NAME" as stage_build
+    component "stage: deploy  ★ bonus\n──────────────────────\nkubectl set image deployment/fsa-be \\\n  fsa-be=$IMAGE_NAME\n— alebo —\nhelm upgrade --install fsa-be ..." as stage_deploy
+  }
+
+  component "Group Variables\nCONTAINER_REGISTRY\nDOCKER_USERNAME\nDOCKER_PASSWORD\n[KUBE_CONFIG  ★ bonus]" as vars
+}
+
+package "AKS  —  Namespace: infra" as AKS_INFRA #D5F5E3 {
+  component "GitLab Runner\n(Kubernetes executor\ntag: fsa-runner)" as runner
+}
+
+AzureContainerRegistry(acr, "ACR\n<prefix>acr", "fsa-be:<job>-<sha>\nfsa-fe:<job>-<sha>")
+
+package "AKS  —  Namespace: app  ★ bonus" as AKS_APP #FEF9E7 {
+  component "Deployment  fsa-be\n(nový image)" as be_dep
+  component "Deployment  fsa-fe\n(nový image)" as fe_dep
+}
+
+dev --> ghrepo : git push
+ghrepo --> glrepo : git push --mirror gitlab
+
+glrepo --> stage_build : trigger (on push to master)
+vars ..> stage_build : injektuje premenné
+stage_build --> runner : job request
+
+runner --> acr : docker push\nfsa-be / fsa-fe
+
+acr ..> stage_deploy : image tag
+stage_deploy --> runner : deploy job
+runner --> be_dep : kubectl / helm
+runner --> fe_dep : kubectl / helm
+
+note top of stage_deploy
+  ★ Bonus pre pokročilých:
+  Pridať KUBE_CONFIG do Group Variables
+  (base64 encoded kubeconfig)
+end note
+
+note bottom of acr
+  Tag formát:
+  ${CI_JOB_ID}-${CI_COMMIT_SHORT_SHA}
+  → traceability každého buildu
+end note
+
+@enduml

@@ -1,0 +1,19 @@
+{
+  "_student_prefix_hint": "Tvoje priezvisko, resp. jedinecny identifikator. Iba male pismena, pomlcky. Resources budu: rg-fsa-<meno>, aks-fsa-<meno> atd.",
+  "student_prefix": "meno",
+  "location": "northeurope",
+  "subscription_id": "00000000-0000-0000-0000-000000000000",
+  "tenant_id": "00000000-0000-0000-0000-000000000000",
+  "_tfstate_hint": "Storage Account pre TF state - vytvorte rucne pred spustenim terraform init (viz README)",
+  "tfstate_resource_group": "rg-fsa-tfstate",
+  "tfstate_storage_account": "fsafstate",
+  "tfstate_container": "tfstate",
+  "tfstate_year": "2026",
+  "_psql_location_hint": "PostgreSQL moze vyzadovat iny region ako AKS (niektoré subscriptions maju restrickcie v westeurope). Skus northeurope ak westeurope nefunguje.",
+  "psql_location": "northeurope",
+  "psql_admin": "fsaadmin",
+  "psql_password": "P@ssword12345!",
+  "node_count": 1,
+  "vm_size": "Standard_B2s_v2",
+  "environment": "lab"
+}

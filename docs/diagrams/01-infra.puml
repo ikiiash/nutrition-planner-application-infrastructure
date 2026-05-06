@@ -1,0 +1,71 @@
+@startuml
+title FSA 2026 — Azure infraštruktúra (Terraform)
+
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/master/dist
+!include AzurePuml/AzureCommon.puml
+!include AzurePuml/Containers/AzureKubernetesService.puml
+!include AzurePuml/Containers/AzureContainerRegistry.puml
+!include AzurePuml/Databases/AzureDatabaseForPostgreSQL.puml
+!include AzurePuml/Networking/AzurePublicIPAddress.puml
+!include AzurePuml/Networking/AzureLoadBalancer.puml
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+top to bottom direction
+
+package "Terraform  (lokálne / CI)" as TF #F5EEF8 {
+  component "terraform init\nterraform plan\nterraform apply" as tf
+}
+
+package "Azure  —  Zdieľané (lektor)" as SHARED #F2F3F4 {
+  database "Azure Storage Account\nstfsapieterr / tfstate\n(Terraform remote state)" as tfstate
+}
+
+package "Azure  —  Resource Group  (<prefix>-rg)" as RG #D6EAF8 {
+
+  AzureContainerRegistry(acr, "ACR", "<prefix>acr")
+
+  package "AKS Cluster  (<prefix>-aks)" as AKS #D5F5E3 {
+    component "System Node Pool\n(Standard_D2s_v5 × 2)" as nodepool
+  }
+
+  AzureDatabaseForPostgreSQL(psql, "PostgreSQL Flexible\n(<prefix>-psql)", "keycloak DB\nfsa-db")
+}
+
+package "Node Resource Group  (MC_<prefix>-rg_...)" as NODERG #EAF2FF {
+  AzurePublicIPAddress(pip, "Public IP", "pip-<prefix>")
+  AzureLoadBalancer(lb, "Load Balancer", "auto-managed")
+  component "VM Scale Set\n(worker nodes)" as vmss
+}
+
+' Terraform creates
+tf --> tfstate : remote state
+tf --> RG : creates all resources
+
+' AKS manages node RG
+AKS --> NODERG : manages\n(node_resource_group)
+
+' ACR <-> AKS
+acr <--> AKS : RBAC\naz aks update --attach-acr
+
+' Networking
+nodepool --> vmss : beží na
+lb --> pip : viaže sa na
+vmss --> lb : routuje cez
+
+' DB access
+AKS --> psql : Allow Azure services\n(manuálny krok v portáli)
+
+note right of pip
+  Musí byť v Node Resource Group,
+  nie v hlavnej RG
+end note
+
+note right of psql
+  Po terraform apply:
+  Portal → Networking →
+  Allow Azure services → Save
+end note
+
+@enduml

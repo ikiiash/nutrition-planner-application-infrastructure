@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nutrition-planner-fe
+  namespace: app
+  labels:
+    app: nutrition-planner-fe
+spec:
+  selector:
+    app: nutrition-planner-fe
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+  # loadBalancerIP: "52.138.207.76"
