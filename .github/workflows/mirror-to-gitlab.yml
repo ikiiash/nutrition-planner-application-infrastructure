@@ -2,8 +2,6 @@ name: Mirror to GitLab
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -22,8 +20,13 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           GITLAB_REPO_URL: ${{ secrets.GITLAB_REPO_URL }}
         run: |
+          if [ -z "$GITLAB_USERNAME" ] || [ -z "$GITLAB_TOKEN" ] || [ -z "$GITLAB_REPO_URL" ]; then
+            echo "GitLab mirror secrets are not configured."
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add gitlab "https://${GITLAB_USERNAME}:${GITLAB_TOKEN}@${GITLAB_REPO_URL#https://}"
-          git push gitlab main:main
+          git push gitlab "HEAD:${GITHUB_REF_NAME}"
           git push gitlab --tags

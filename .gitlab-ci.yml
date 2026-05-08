@@ -1,0 +1,27 @@
+stages:
+  - validate
+
+validate:terraform:
+  stage: validate
+  tags:
+    - fsa
+  image: hashicorp/terraform:1.11.4
+  script:
+    - |
+      set -e
+      for dir in terraform/*; do
+        if [ -d "$dir" ]; then
+          echo "Validating $dir"
+          terraform -chdir="$dir" init -backend=false -input=false
+          terraform -chdir="$dir" validate
+        fi
+      done
+
+validate:kubernetes:
+  stage: validate
+  tags:
+    - fsa
+  image: alpine:3.22
+  script:
+    - apk add --no-cache yamllint
+    - yamllint -d "{extends: default, rules: {line-length: disable, trailing-spaces: disable}}" kubernetes
