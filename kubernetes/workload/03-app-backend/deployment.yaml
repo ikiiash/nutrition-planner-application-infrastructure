@@ -68,11 +68,11 @@ spec:
                   key: api_key
           resources:
             limits:
-              cpu: 750m
-              memory: 768Mi
+              cpu: 500m
+              memory: 500Mi
             requests:
-              cpu: 200m
-              memory: 384Mi
+              cpu: 100m
+              memory: 250Mi
           ports:
             - name: http
               containerPort: 8080
