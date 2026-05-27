@@ -22,7 +22,8 @@ spec:
           image: acrfsakiiashchenkoi.azurecr.io/nutrition-planner-backend:latest
           imagePullPolicy: Always
           env:
-            # Nacitanie citlivych udajov pre DB z K8s secrets
+            - name: SPRING_PROFILES_ACTIVE
+              value: "kubernetes"
             - name: DB_URL
               valueFrom:
                 secretKeyRef:
@@ -60,33 +61,36 @@ spec:
               value: $(ISSUER_URI)
             - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
               value: $(JWT_SET_URI)
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-secret
+                  key: api_key
           resources:
-            # TODO: nastavit podla metrik podu, toto su len odhadnute hodnoty
             limits:
-              cpu: 500m
-              memory: 500Mi
+              cpu: 750m
+              memory: 768Mi
             requests:
-              cpu: 100m
-              memory: 250Mi
+              cpu: 200m
+              memory: 384Mi
           ports:
             - name: http
               containerPort: 8080
-          # FSA mozete nechat zakomentovane, kedze nemate implementovane health checky - sluzi iba ako ukazka
-          # livenessProbe:
-          #   initialDelaySeconds: 60
-          #   periodSeconds: 10
-          #   timeoutSeconds: 5
-          #   successThreshold: 1
-          #   failureThreshold: 5
-          #   httpGet:
-          #     path: /actuator/health
-          #     port: http
-          # readinessProbe:
-          #   initialDelaySeconds: 60
-          #   periodSeconds: 10
-          #   timeoutSeconds: 5
-          #   successThreshold: 1
-          #   failureThreshold: 5
-          #   httpGet:
-          #     path: /actuator/health
-          #     port: http
+          livenessProbe:
+            initialDelaySeconds: 90
+            periodSeconds: 15
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 5
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+          readinessProbe:
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
