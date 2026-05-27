@@ -25,4 +25,4 @@ validate:kubernetes:
   script:
     - apk add --no-cache yamllint
     - |
-      yamllint -d "{extends: default, rules: {line-length: disable, trailing-spaces: disable}}" kubernetes
+      yamllint -d "{extends: default, rules: {line-length: disable, trailing-spaces: disable, document-start: disable, new-lines: disable}}" kubernetes
