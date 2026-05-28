@@ -15,10 +15,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - nutrition-planner.20-166-89-50.nip.io
-      secretName: nutrition-planner-pip-tls-cert
+        - nutrition-planner.net
+      secretName: nutrition-planner-tls-cert
   rules:
-    - host: nutrition-planner.20-166-89-50.nip.io
+    - host: nutrition-planner.net
       http:
         paths:
           - path: /auth

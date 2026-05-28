@@ -15,7 +15,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: nutrition-planner.20-166-89-50.nip.io
+    - host: nutrition-planner.net
       http:
         paths:
           - path: /api(/|$)(.*)
